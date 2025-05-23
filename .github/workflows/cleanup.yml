@@ -1,0 +1,50 @@
+name: Auto Delete Old Files
+on:
+  schedule:
+    - cron: '0 0 * * *' # Run daily at midnight UTC
+  workflow_dispatch:
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+      
+      - name: Delete files older than 30 days
+        run: |
+          python -c "
+          import os
+          from datetime import datetime, timedelta
+          
+          threshold = datetime.now() - timedelta(days=30)
+          uploads_dir = 'uploads'
+          
+          if os.path.exists(uploads_dir):
+              for filename in os.listdir(uploads_dir):
+                  if filename.lower().endswith(('.jpg', '.jpeg')):
+                      try:
+                          timestamp_str = filename.split('_')[0]
+                          timestamp = int(timestamp_str)
+                          file_date = datetime.fromtimestamp(timestamp/1000)
+                          
+                          if file_date < threshold:
+                              filepath = os.path.join(uploads_dir, filename)
+                              os.remove(filepath)
+                              print(f'Deleted: {filename}')
+                      except (ValueError, IndexError) as e:
+                          print(f'Skipping {filename}: {str(e)}')
+                          continue
+          "
+      
+      - name: Commit and push changes
+        run: |
+          git config --global user.name 'GitHub Actions'
+          git config --global user.email 'actions@github.com'
+          git add .
+          git commit -m \"Auto delete files older than 30 days\" || echo \"No changes to commit\"
+          git push
